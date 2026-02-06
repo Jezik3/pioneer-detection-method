@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+#C:\Users\marti\anaconda3\python.exe ecb_hicp_panel_var_granger_be.py
+# ptl is plotting library 
+
 """
 ECB HICP Inflation Panel — ADF, Granger Causality (BE), and VAR (BIC)
 ====================================================================
@@ -55,7 +59,6 @@ import requests
 import pandas as pd
 from io import StringIO
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 
 from statsmodels.tsa.stattools import adfuller, kpss, acf, pacf
