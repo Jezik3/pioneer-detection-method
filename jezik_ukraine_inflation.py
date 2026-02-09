@@ -2,17 +2,6 @@
 # -*- coding: utf-8 -*-
 
 
-
-
-
-#C:\Users\marti\anaconda3\python.exe ecb_hicp_panel_var_granger_be.py
-#   For local update
-# ptl is plotting library 
-# git status > git add .
-# git commit -m "test non modifications"
-#   For distant personal repository update:
-# git push
-
 """
 ECB HICP Inflation Panel — ADF, Granger Causality (BE), and VAR (BIC)
 ====================================================================
@@ -272,7 +261,7 @@ infl_panel.index = pd.to_datetime(infl_panel.index).to_period("M").to_timestamp(
 ua_yoy.index = pd.to_datetime(ua_yoy.index).to_period("M").to_timestamp(how="start")
 
 infl_panel = infl_panel.join(ua_yoy, how="left")
-
+#################################################################
 
 # ------------------------------------------------------------
 # Plot the inflation panel (one line per country)
@@ -382,5 +371,172 @@ print(f"Selected lag order p = {p}")
 var_res = model.fit(p)
 print("\n=== VAR estimation results ===")
 print(var_res.summary())
+
+
+###############################################
+# Start of modifications and answers for the test:
+
+# 1:
+print("infl_panel is a data frame that contains inflation data by country and time period")
+
+
+# 2: 
+infl_panel.dtypes
+print("UA inflation type is float64")
+
+# 3:
+infl_description = pd.DataFrame({
+    "start_date": infl_panel.apply(lambda s: s.dropna().index.min()),
+    "end_date": infl_panel.apply(lambda s: s.dropna().index.max()),
+    "frequency": infl_panel.apply(
+        lambda s: pd.infer_freq(s.dropna().index)
+    ),
+    "infl_mean": infl_panel.mean(),
+    "infl_std": infl_panel.std(),
+})
+
+latex_table = infl_description.to_latex(
+    index=True,
+    float_format="%.3f",
+    na_rep="",
+    caption="Descriptive statistics for HICP inflation panel",
+    label="tab:infl_description"
+)
+
+print(latex_table)
+
+
+# 4:
+from scipy.stats import pearsonr
+
+def corr_test(series1, series2):
+    # Align and drop missing values
+    df = pd.concat([series1, series2], axis=1).dropna()
+    x, y = df.iloc[:,0], df.iloc[:,1]
+
+    r, p = pearsonr(x, y)
+    return {
+        "corr_percent": r * 100,
+        "p_value": p,
+        "n_obs": len(df)
+    }
+
+# Run tests
+ua_fr = corr_test(infl_panel["UA"], infl_panel["FR"])
+fr_de = corr_test(infl_panel["FR"], infl_panel["DE"])
+
+table = pd.DataFrame(
+    [
+        ["UA–FR", f"{ua_fr['corr_percent']:.2f}%"],
+        ["FR–DE", f"{fr_de['corr_percent']:.2f}%"],
+    ],
+    columns=["Pair", "Correlation"]
+)
+
+
+print(table)
+
+# 5 test for corr significance for each pair ...
+table2 = pd.DataFrame(
+    [
+        [
+            "UA–FR",
+            f"{ua_fr['corr_percent']:.2f}%",
+            ua_fr["p_value"],
+            ua_fr["n_obs"]
+        ],
+        [
+            "FR–DE",
+            f"{fr_de['corr_percent']:.2f}%",
+            fr_de["p_value"],
+            fr_de["n_obs"]
+        ],
+    ],
+    columns=["Pair", "Correlation", "p-value", "N"]
+)
+
+print(table2)
+print("The correlation UA-FR is not statistically significant at any level, while FR-DE is statistically significant at any confidence interval")
+
+# 6 test for time series BREAK 
+from statsmodels.stats.diagnostic import breaks_cusumolsresid
+
+def chow_test(series, break_date):
+    s = series.dropna()
+    df = pd.DataFrame({"y": s})
+    df["t"] = np.arange(len(df))
+    df = df.set_index(s.index)
+
+    # Split at breakpoint
+    df1 = df.loc[df.index <= break_date]
+    df2 = df.loc[df.index > break_date]
+
+    # Fit models
+    m_full = OLS(df["y"], add_constant(df["t"])).fit()
+    m1 = OLS(df1["y"], add_constant(df1["t"])).fit()
+    m2 = OLS(df2["y"], add_constant(df2["t"])).fit()
+
+    # Chow statistic
+    k = 2  # parameters
+    RSS_full = sum(m_full.resid**2)
+    RSS_1 = sum(m1.resid**2)
+    RSS_2 = sum(m2.resid**2)
+
+    chow = ((RSS_full - (RSS_1 + RSS_2)) / k) / ((RSS_1 + RSS_2) / (len(df) - 2*k))
+    return chow
+
+break_date = "2014-03-01"
+
+ua_chow = chow_test(infl_panel["UA"], break_date)
+fr_chow = chow_test(infl_panel["FR"], break_date)
+
+print("UA Chow statistic:", ua_chow)
+print("Ukraine Chow statistic is extremely high, It indicates a very strong structural break in the inflation series at the chosen date.")
+print("FR Chow statistic:", fr_chow)
+print("France Chow statistic is also high, it shows a statistically significant break at the same date.")
+
+
+# 7 how persistent (is inflation always at a given level ?? ) is inflation in ua, and fr 
+#       Using the ADF test (augmented diky fuller test)
+
+def adf_summary(series):
+    s = series.dropna()
+    result = adfuller(s)
+    return {
+        "ADF statistic": result[0],
+        "p-value": result[1],
+        "lags": result[2],
+        "n_obs": result[3]
+    }
+
+ua_adf = adf_summary(infl_panel["UA"])
+fr_adf = adf_summary(infl_panel["FR"])
+
+adf_table = pd.DataFrame(
+    [
+        ["UA", ua_adf["ADF statistic"], ua_adf["p-value"], ua_adf["lags"], ua_adf["n_obs"]],
+        ["FR", fr_adf["ADF statistic"], fr_adf["p-value"], fr_adf["lags"], fr_adf["n_obs"]],
+    ],
+    columns=["Country", "ADF Statistic", "p-value", "Lags Used", "Observations"]
+)
+
+print(adf_table)
+
+print("Ukraine’s inflation likely rejects the unit root at the 5% level, statistically significant at 0.05%")
+print("France's inflation behaves more like a persistent process, statistically significant at 0.1%")
+
+
+
+
+# 8 apply pioneer detection method in ua a PIONEER? when ?
+
+
+
+
+
+
+
+
+
 
 
