@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+
+
+
+
 #C:\Users\marti\anaconda3\python.exe ecb_hicp_panel_var_granger_be.py
 #   For local update
 # ptl is plotting library 
@@ -378,4 +382,5 @@ print(f"Selected lag order p = {p}")
 var_res = model.fit(p)
 print("\n=== VAR estimation results ===")
 print(var_res.summary())
+
 
